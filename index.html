@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generator Kartu Soal & Naskah Ujian</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#eef1f6;}
+  .navy{background:#0b2545;}
+  .navy-light{background:#13315c;}
+  .accent{color:#1d4ed8;}
+  .btn-primary{background:#0b2545;color:#fff;transition:.15s;}
+  .btn-primary:hover{background:#13315c;}
+  .btn-primary:disabled{background:#94a3b8;cursor:not-allowed;}
+  .tab-btn.active{border-bottom:3px solid #0b2545;color:#0b2545;font-weight:600;}
+  .tab-btn{border-bottom:3px solid transparent;color:#64748b;}
+  .doctab.active{background:#0b2545;color:#fff;}
+  .doctab{background:#e2e8f0;color:#334155;}
+  .doc-a4{background:#fff;width:100%;max-width:210mm;margin:0 auto;padding:18mm 15mm;box-shadow:0 0 12px rgba(0,0,0,.12);color:#111;}
+  .doc-a4 table{width:100%;border-collapse:collapse;font-size:12px;}
+  .doc-a4 table,.doc-a4 th,.doc-a4 td{border:1px solid #333;}
+  .doc-a4 th,.doc-a4 td{padding:4px 6px;text-align:left;vertical-align:top;}
+  .kop-line{border-top:3px solid #000;border-bottom:1px solid #000;margin:4px 0 12px;}
+  .spinner{border:3px solid #cbd5e1;border-top-color:#0b2545;border-radius:50%;width:22px;height:22px;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .fade-in{animation:fadein .3s ease;}
+  @keyframes fadein{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:#94a3b8;border-radius:4px;}
+  @media print{
+    body *{visibility:hidden;}
+    #printArea, #printArea *{visibility:visible;}
+    #printArea{position:absolute;top:0;left:0;width:100%;}
+    .doc-a4{box-shadow:none;margin:0;page-break-after:always;max-width:100%;padding:15mm 15mm;}
+    .no-print{display:none!important;}
+  }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- HEADER -->
+<header class="navy text-white py-5 px-6 shadow-md no-print">
+  <div class="max-w-7xl mx-auto flex items-center gap-3">
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6"><path d="M4 4h16v16H4z" stroke-opacity="0"/><path d="M6 3v18M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>
+    <div class="flex-1">
+      <h1 class="text-xl md:text-2xl font-bold">Generator Kartu Soal & Naskah Ujian AI</h1>
+      <p class="text-sm text-blue-100">Alur kerja 2 tahap: Kisi-Kisi & Kartu Soal → Naskah Ujian, LJS, dan Kunci Jawaban siap cetak A4</p>
+    </div>
+    <button onclick="resetApp()" class="flex items-center gap-2 border border-white/40 hover:bg-white/10 px-3 py-2 rounded-md text-sm shrink-0" title="Kembali ke tampilan awal">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+      Reset
+    </button>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+  <!-- PANEL 1: INPUT -->
+  <section class="bg-white rounded-xl shadow-sm border border-slate-200 no-print">
+    <div class="flex border-b border-slate-200">
+      <button id="tabBtn1" onclick="switchTab(1)" class="tab-btn active px-6 py-3 text-sm md:text-base">Tahap 1 · Kartu Soal & Kisi-Kisi</button>
+      <button id="tabBtn2" onclick="switchTab(2)" disabled class="tab-btn px-6 py-3 text-sm md:text-base opacity-40 cursor-not-allowed">Tahap 2 · Naskah Ujian Siap Cetak</button>
+    </div>
+
+    <!-- TAHAP 1 FORM -->
+    <div id="tab1" class="p-6 space-y-5">
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-2">Sumber Data Materi</label>
+        <div class="flex gap-6">
+          <label class="flex items-center gap-2 text-sm"><input type="radio" name="sumber" value="manual" checked onchange="toggleSumber()"> Mode Input Form Manual</label>
+          <label class="flex items-center gap-2 text-sm"><input type="radio" name="sumber" value="pdf" onchange="toggleSumber()"> Mode Upload File PDF Modul/Buku Ajar</label>
+        </div>
+      </div>
+
+      <div id="pdfZone" class="hidden border-2 border-dashed border-slate-300 rounded-lg p-6 text-center bg-slate-50">
+        <input type="file" id="pdfInput" accept="application/pdf" class="hidden" onchange="handlePdf(event)">
+        <div id="pdfLabel" class="cursor-pointer" onclick="document.getElementById('pdfInput').click()">
+          <p class="text-slate-500 text-sm">📄 Klik atau seret file PDF modul/buku ajar ke sini</p>
+          <p class="text-xs text-slate-400 mt-1">Materi wacana & pertanyaan akan 100% bersumber dari isi PDF ini</p>
+        </div>
+        <div id="pdfStatus" class="text-sm mt-3"></div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1">Satuan Pendidikan</label>
+          <input id="satuan" type="text" placeholder="Contoh: SMP Negeri 3 Kerinci / MTsN 1..." class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1">Mata Pelajaran</label>
+          <input id="mapel" type="text" placeholder="Contoh: Bahasa Indonesia, IPA, Matematika..." class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-4 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1">Jenjang</label>
+          <select id="jenjang" onchange="updateKelas()" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+            <option value="" selected disabled>Pilih jenjang...</option>
+            <option value="TK/RA">TK/RA</option>
+            <option value="SD/MI">SD/MI</option>
+            <option value="SMP/MTs">SMP/MTs</option>
+            <option value="SMA/MA">SMA/MA</option>
+            <option value="SMK">SMK</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1">Kelas</label>
+          <select id="kelas" onchange="updateFase()" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+            <option value="" selected disabled>Pilih jenjang dulu</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1">Fase</label>
+          <input id="fase" type="text" readonly placeholder="Otomatis" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm bg-slate-100 text-slate-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1">Kurikulum</label>
+          <select id="kurikulum" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+            <option value="" selected disabled>Pilih kurikulum...</option>
+            <option>Kurikulum Merdeka</option>
+            <option>Kurikulum Berbasis Cinta (KBC)</option>
+            <option>Kurikulum 2013</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1">Jenis Asesmen</label>
+          <select id="jenisAsesmen" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+            <option value="" selected disabled>Pilih jenis asesmen...</option>
+            <option>Asesmen Sumatif Akhir Semester (ASAS)</option>
+             <option>Asesmen Sumatif Akhir Tahun (ASAT)</option>
+            <option>Asesmen Sumatif Tengah Semester (ASTS)</option>
+            <option>Asesmen Formatif Bab</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1">Alokasi Waktu</label>
+          <input id="waktu" type="text" placeholder="Contoh: 90 Menit" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1">Jumlah Total Butir Soal</label>
+          <input id="jumlahTotal" type="number" min="1" placeholder="Contoh: 10" oninput="updateKomposisiInfo()" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+
+          <label class="block text-sm font-medium text-slate-600 mb-1 mt-3">Jenis & Jumlah Soal per Bentuk</label>
+          <div class="space-y-2 border border-slate-200 rounded-md p-3 bg-slate-50">
+            <div class="flex items-center gap-2">
+              <input type="checkbox" id="chkPg" onchange="toggleJenis('pg')">
+              <label for="chkPg" class="text-sm flex-1">Pilihan Ganda</label>
+              <input type="number" id="jmlPg" min="0" value="0" disabled oninput="updateKomposisiInfo()" class="w-24 border border-slate-300 rounded-md px-2 py-1 text-sm disabled:bg-slate-100">
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="checkbox" id="chkIsian" onchange="toggleJenis('isian')">
+              <label for="chkIsian" class="text-sm flex-1">Isian Singkat</label>
+              <input type="number" id="jmlIsian" min="0" value="0" disabled oninput="updateKomposisiInfo()" class="w-24 border border-slate-300 rounded-md px-2 py-1 text-sm disabled:bg-slate-100">
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="checkbox" id="chkUraian" onchange="toggleJenis('uraian')">
+              <label for="chkUraian" class="text-sm flex-1">Uraian</label>
+              <input type="number" id="jmlUraian" min="0" value="0" disabled oninput="updateKomposisiInfo()" class="w-24 border border-slate-300 rounded-md px-2 py-1 text-sm disabled:bg-slate-100">
+            </div>
+          </div>
+          <p id="komposisiInfo" class="text-xs mt-1 text-slate-500">Centang minimal satu bentuk soal, lalu tentukan jumlahnya. Total harus sama dengan Jumlah Total Butir Soal.</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1">Sebaran Level Kognitif</label>
+          <select id="levelKognitif" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+            <option value="" selected disabled>Pilih sebaran level kognitif...</option>
+            <option>Standar Seimbang (30% LOTS C1–C2, 40% MOTS C3, 30% HOTS C4–C6)</option>
+            <option>Dominan HOTS (20% LOTS, 30% MOTS, 50% HOTS)</option>
+            <option>Dasar Pemahaman (50% LOTS, 35% MOTS, 15% HOTS)</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-600 mb-1">Materi Pokok / Capaian Pembelajaran (CP)</label>
+        <textarea id="materiCp" rows="3" placeholder="Tuliskan elemen CP dan lingkup materi pokok..." class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-600 mb-1">Catatan Khusus / Permintaan Wacana (Opsional)</label>
+        <textarea id="catatan" rows="2" placeholder="Contoh: Sisipkan teks laporan observasi tentang flora/fauna lokal..." class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"></textarea>
+      </div>
+
+      <button id="btnGen1" onclick="generateTahap1()" class="btn-primary w-full py-3 rounded-lg font-semibold text-sm md:text-base flex items-center justify-center gap-2">
+        🚀 Generate Kartu Soal & Kisi-Kisi AI (Langkah 1)
+      </button>
+    </div>
+
+    <!-- TAHAP 2 FORM -->
+    <div id="tab2" class="p-6 space-y-5 hidden">
+      <div class="grid md:grid-cols-2 gap-4">
+        <div><label class="block text-sm font-medium text-slate-600 mb-1">Nama Sekolah</label><input id="t2sekolah" type="text" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"></div>
+        <div><label class="block text-sm font-medium text-slate-600 mb-1">Mata Pelajaran</label><input id="t2mapel" type="text" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"></div>
+        <div><label class="block text-sm font-medium text-slate-600 mb-1">Kelas / Fase</label><input id="t2kelas" type="text" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"></div>
+        <div><label class="block text-sm font-medium text-slate-600 mb-1">Jenis Penilaian</label><input id="t2jenis" type="text" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"></div>
+        <div><label class="block text-sm font-medium text-slate-600 mb-1">Tahun Ajaran/Semester</label><input id="t2ta" type="text" placeholder="Contoh: 2026/2027 – Semester Ganjil" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"></div>
+        <div><label class="block text-sm font-medium text-slate-600 mb-1">Hari & Tanggal Pelaksanaan</label><input id="t2tanggal" type="text" placeholder="Contoh: Senin, 8 Desember 2026" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"></div>
+        <div class="md:col-span-2"><label class="block text-sm font-medium text-slate-600 mb-1">Nama Guru Pengampu</label><input id="t2guru" type="text" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"></div>
+      </div>
+
+      <div>
+        <div class="flex justify-between items-center mb-1">
+          <label class="block text-sm font-medium text-slate-600">Sumber Kartu Soal & Kisi-Kisi (Otomatis dari Tahap 1)</label>
+          <button onclick="syncFromTahap1()" class="text-xs accent underline">Sinkronkan Ulang dari Tahap 1</button>
+        </div>
+        <textarea id="sumberT1" readonly rows="6" class="w-full border border-slate-300 rounded-md px-3 py-2 text-xs bg-slate-100 text-slate-600"></textarea>
+      </div>
+
+      <div class="flex flex-wrap gap-3">
+        <button onclick="generateTahap2('all')" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-semibold">⚡ Generate 3 Dokumen Lengkap (Naskah + LJS + Kunci)</button>
+        <button onclick="generateTahap2('naskah')" class="border border-slate-300 px-4 py-2.5 rounded-lg text-sm">Naskah Soal Saja</button>
+        <button onclick="generateTahap2('ljs')" class="border border-slate-300 px-4 py-2.5 rounded-lg text-sm">LJS Saja</button>
+        <button onclick="generateTahap2('kunci')" class="border border-slate-300 px-4 py-2.5 rounded-lg text-sm">Kunci & Pedoman Penskoran Saja</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PANEL 2: WORKSPACE -->
+  <section class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-slate-200 no-print">
+      <div class="flex gap-2 flex-wrap">
+        <button onclick="showDoc('t1')" id="dt-t1" class="doctab active px-4 py-2 rounded-md text-sm font-medium">Kisi-Kisi & Kartu Soal (Tahap 1)</button>
+        <button onclick="showDoc('naskah')" id="dt-naskah" class="doctab hidden px-4 py-2 rounded-md text-sm font-medium">1. Naskah Soal Ujian A4</button>
+        <button onclick="showDoc('ljs')" id="dt-ljs" class="doctab hidden px-4 py-2 rounded-md text-sm font-medium">2. Lembar Jawaban Siswa (LJS)</button>
+        <button onclick="showDoc('kunci')" id="dt-kunci" class="doctab hidden px-4 py-2 rounded-md text-sm font-medium">3. Kunci & Rubrik Penskoran</button>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="copyActive()" class="border border-slate-300 px-3 py-2 rounded-md text-xs">📋 Salin Teks</button>
+        <button onclick="downloadDocx()" class="border border-slate-300 px-3 py-2 rounded-md text-xs">📥 Unduh Word (.docx)</button>
+        <button onclick="window.print()" class="border border-slate-300 px-3 py-2 rounded-md text-xs">🖨️ Cetak / Simpan PDF</button>
+      </div>
+    </div>
+
+    <div class="p-6 min-h-[300px] bg-slate-100" id="workspaceWrap">
+      <div id="emptyState" class="text-center py-16 text-slate-400">
+        <svg class="mx-auto mb-3" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5"/><path d="M9 13h6M9 17h6M9 9h2"/></svg>
+        <p class="text-sm">Belum Ada Dokumen. Silakan lengkapi pengaturan pada Panel Atas dan klik tombol Generate untuk memulai.</p>
+      </div>
+      <div id="printArea">
+        <div id="doc-t1" class="doc-a4 hidden fade-in"></div>
+        <div id="doc-naskah" class="doc-a4 hidden fade-in"></div>
+        <div id="doc-ljs" class="doc-a4 hidden fade-in"></div>
+        <div id="doc-kunci" class="doc-a4 hidden fade-in"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="text-center pb-6 no-print space-y-1">
+    <p class="text-xs text-slate-400">Catatan: fitur generate AI pada aplikasi ini memanggil Claude API dan hanya aktif saat file dibuka melalui pratinjau Claude.ai.</p>
+    <p class="text-xs text-slate-500">Aplikasi ini dibuat oleh <a href= target="_blank" rel="noopener" class="accent font-semibold underline">edukasi</a></p>
+  </div>
+</main>
+
+<!-- MODAL FILE INVALID -->
+<div id="modalError" class="hidden fixed inset-0 bg-black/40 items-center justify-center z-50 no-print">
+  <div class="bg-white rounded-lg p-6 max-w-sm w-full text-center">
+    <p class="text-red-600 font-semibold mb-2">File Tidak Valid</p>
+    <p class="text-sm text-slate-600 mb-4" id="modalErrorMsg">Harap unggah file dengan format PDF.</p>
+    <button onclick="document.getElementById('modalError').classList.add('hidden')" class="btn-primary px-4 py-2 rounded-md text-sm">Tutup</button>
+  </div>
+</div>
+
+<script>
+const KELAS_MAP = {
+  "TK/RA": ["TK A / RA A","TK B / RA B"],
+  "SD/MI": ["Kelas 1","Kelas 2","Kelas 3","Kelas 4","Kelas 5","Kelas 6"],
+  "SMP/MTs": ["Kelas 7","Kelas 8","Kelas 9"],
+  "SMA/MA": ["Kelas 10","Kelas 11","Kelas 12"],
+  "SMK": ["Kelas 10","Kelas 11","Kelas 12"]
+};
+function updateKelas(){
+  const j = document.getElementById('jenjang').value;
+  const sel = document.getElementById('kelas');
+  sel.innerHTML = '<option value="" selected disabled>Pilih kelas...</option>';
+  (KELAS_MAP[j]||[]).forEach(k=>{
+    const o=document.createElement('option'); o.value=k; o.textContent=k; sel.appendChild(o);
+  });
+  document.getElementById('fase').value='';
+}
+function updateFase(){
+  const j = document.getElementById('jenjang').value;
+  const k = document.getElementById('kelas').value;
+  let fase='';
+  if(j==='TK/RA') fase='Fase Fondasi';
+  else if(j==='SD/MI'){
+    if(['Kelas 1','Kelas 2'].includes(k)) fase='Fase A';
+    else if(['Kelas 3','Kelas 4'].includes(k)) fase='Fase B';
+    else if(['Kelas 5','Kelas 6'].includes(k)) fase='Fase C';
+  } else if(j==='SMP/MTs') fase='Fase D';
+  else if(j==='SMA/MA'||j==='SMK'){
+    if(k==='Kelas 10') fase='Fase E';
+    else if(['Kelas 11','Kelas 12'].includes(k)) fase='Fase F';
+  }
+  document.getElementById('fase').value=fase;
+}
+function toggleJenis(kind){
+  const map = {pg:['chkPg','jmlPg'], isian:['chkIsian','jmlIsian'], uraian:['chkUraian','jmlUraian']};
+  const [chkId, numId] = map[kind];
+  const checked = document.getElementById(chkId).checked;
+  const numEl = document.getElementById(numId);
+  numEl.disabled = !checked;
+  if(!checked) numEl.value = 0;
+  updateKomposisiInfo();
+}
+function updateKomposisiInfo(){
+  const total = parseInt(document.getElementById('jumlahTotal').value) || 0;
+  const pg = parseInt(document.getElementById('jmlPg').value) || 0;
+  const isian = parseInt(document.getElementById('jmlIsian').value) || 0;
+  const uraian = parseInt(document.getElementById('jmlUraian').value) || 0;
+  const sum = pg + isian + uraian;
+  const info = document.getElementById('komposisiInfo');
+  if(total===0){
+    info.textContent = 'Centang minimal satu bentuk soal, lalu tentukan jumlahnya. Total harus sama dengan Jumlah Total Butir Soal.';
+    info.className = 'text-xs mt-1 text-slate-500';
+  } else if(sum===total){
+    info.textContent = `✅ Sesuai: ${sum} dari ${total} butir soal telah dialokasikan.`;
+    info.className = 'text-xs mt-1 text-green-600';
+  } else {
+    info.textContent = `⚠️ Jumlah bentuk soal (${sum}) belum sama dengan Jumlah Total Butir Soal (${total}).`;
+    info.className = 'text-xs mt-1 text-amber-600';
+  }
+}
+function getKomposisiText(){
+  const parts = [];
+  const pg = parseInt(document.getElementById('jmlPg').value) || 0;
+  const isian = parseInt(document.getElementById('jmlIsian').value) || 0;
+  const uraian = parseInt(document.getElementById('jmlUraian').value) || 0;
+  if(pg>0) parts.push(`${pg} Pilihan Ganda`);
+  if(isian>0) parts.push(`${isian} Isian Singkat`);
+  if(uraian>0) parts.push(`${uraian} Uraian`);
+  const total = document.getElementById('jumlahTotal').value || (pg+isian+uraian);
+  return `${total} Butir Soal (${parts.join(', ')})`;
+}
+function toggleSumber(){
+  const pdf = document.querySelector('input[name="sumber"]:checked').value==='pdf';
+  document.getElementById('pdfZone').classList.toggle('hidden', !pdf);
+}
+function switchTab(n){
+  document.getElementById('tab1').classList.toggle('hidden', n!==1);
+  document.getElementById('tab2').classList.toggle('hidden', n!==2);
+  document.getElementById('tabBtn1').classList.toggle('active', n===1);
+  document.getElementById('tabBtn2').classList.toggle('active', n===2);
+  if(n===2){
+    ['dt-naskah','dt-ljs','dt-kunci'].forEach(id=> document.getElementById(id).classList.remove('hidden'));
+  }
+}
+function resetApp(){
+  if(!confirm('Reset akan menghapus semua input dan hasil dokumen. Lanjutkan?')) return;
+  document.querySelectorAll('#tab1 input[type="text"], #tab1 textarea, #tab2 input[type="text"]').forEach(el=> el.value='');
+  document.querySelectorAll('#tab1 select').forEach(el=> el.selectedIndex=0);
+  document.getElementById('jumlahTotal').value='';
+  ['jmlPg','jmlIsian','jmlUraian'].forEach(id=>{ document.getElementById(id).value=0; document.getElementById(id).disabled=true; });
+  ['chkPg','chkIsian','chkUraian'].forEach(id=> document.getElementById(id).checked=false);
+  updateKomposisiInfo();
+  document.getElementById('fase').value='';
+  document.getElementById('kelas').innerHTML='<option value="" selected disabled>Pilih jenjang dulu</option>';
+  document.querySelector('input[name="sumber"][value="manual"]').checked = true;
+  toggleSumber();
+  pdfExtractedText = "";
+  document.getElementById('pdfStatus').innerHTML='';
+  document.getElementById('pdfInput').value='';
+  document.getElementById('sumberT1').value='';
+
+  tahap1Result = ""; tahap1Meta = {};
+  docResults = {naskah:"", ljs:"", kunci:""};
+  ['t1','naskah','ljs','kunci'].forEach(k=>{
+    document.getElementById('doc-'+k).classList.add('hidden');
+    document.getElementById('doc-'+k).innerHTML='';
+  });
+  ['dt-naskah','dt-ljs','dt-kunci'].forEach(id=> document.getElementById(id).classList.add('hidden'));
+  document.getElementById('dt-t1').classList.add('active');
+  document.getElementById('emptyState').classList.remove('hidden');
+  currentDoc = 't1';
+
+  document.getElementById('tabBtn2').disabled = true;
+  document.getElementById('tabBtn2').classList.add('opacity-40','cursor-not-allowed');
+  switchTab(1);
+}
+
+// --- PDF handling ---
+let pdfExtractedText = "";
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+async function handlePdf(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  if(file.type !== 'application/pdf'){
+    document.getElementById('modalErrorMsg').textContent = 'Harap unggah file dengan format PDF.';
+    document.getElementById('modalError').classList.remove('hidden');
+    document.getElementById('modalError').classList.add('flex');
+    return;
+  }
+  document.getElementById('pdfStatus').innerHTML = '<span class="spinner inline-block align-middle"></span> Mengekstrak teks PDF...';
+  try{
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+    let text = "";
+    for(let i=1;i<=pdf.numPages;i++){
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      text += content.items.map(it=>it.str).join(' ') + "\n";
+    }
+    pdfExtractedText = text;
+    document.getElementById('pdfStatus').innerHTML = `✅ Berhasil mengekstrak <b>${pdf.numPages} halaman</b> dari "${file.name}"`;
+  }catch(err){
+    document.getElementById('pdfStatus').innerHTML = '❌ Gagal membaca PDF. Coba file lain.';
+  }
+}
+
+// --- Claude API call helper ---
+async function callClaude(promptText){
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1000,
+      messages: [{ role: "user", content: promptText }]
+    })
+  });
+  const data = await response.json();
+  const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+  return text || "(Tidak ada respons dari AI. Silakan coba lagi.)";
+}
+
+function fVal(id){ return document.getElementById(id).value.trim(); }
+
+let tahap1Result = "";
+let tahap1Meta = {};
+
+async function generateTahap1(){
+  const total = parseInt(document.getElementById('jumlahTotal').value) || 0;
+  const pg = parseInt(document.getElementById('jmlPg').value) || 0;
+  const isian = parseInt(document.getElementById('jmlIsian').value) || 0;
+  const uraian = parseInt(document.getElementById('jmlUraian').value) || 0;
+  if(total<=0 || (pg+isian+uraian)!==total){
+    alert('Pastikan Jumlah Total Butir Soal terisi dan jumlah tiap bentuk soal (PG/Isian/Uraian) totalnya sama dengan Jumlah Total Butir Soal.');
+    return;
+  }
+  const komposisi = getKomposisiText();
+  tahap1Meta = {
+    satuan: fVal('satuan'), mapel: fVal('mapel'), jenjang: fVal('jenjang'),
+    kelas: fVal('kelas'), fase: fVal('fase'), kurikulum: fVal('kurikulum'),
+    jenisAsesmen: fVal('jenisAsesmen'), waktu: fVal('waktu'), komposisi,
+    levelKognitif: fVal('levelKognitif'), materiCp: fVal('materiCp'), catatan: fVal('catatan')
+  };
+  const sumberPdf = document.querySelector('input[name="sumber"]:checked').value==='pdf';
+
+  const btn = document.getElementById('btnGen1');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner inline-block"></span> Menyusun Kisi-Kisi & Kartu Soal...';
+
+  let prompt = `Anda adalah pakar asesmen kurikulum Indonesia. Susun dokumen asesmen berbahasa Indonesia dalam format Markdown terstruktur untuk:
+Satuan Pendidikan: ${tahap1Meta.satuan}
+Mata Pelajaran: ${tahap1Meta.mapel}
+Jenjang/Kelas/Fase: ${tahap1Meta.jenjang} / ${tahap1Meta.kelas} / ${tahap1Meta.fase}
+Kurikulum: ${tahap1Meta.kurikulum}
+Jenis Asesmen: ${tahap1Meta.jenisAsesmen}, Waktu: ${tahap1Meta.waktu}
+Komposisi soal: ${tahap1Meta.komposisi}
+Sebaran level kognitif: ${tahap1Meta.levelKognitif}
+Materi Pokok/CP: ${tahap1Meta.materiCp}
+Catatan tambahan: ${tahap1Meta.catatan || '-'}
+
+Hasilkan 3 bagian:
+BAGIAN I: Matriks Kisi-Kisi Asesmen Sumatif (tabel: No, Elemen/CP, Materi Pokok, Indikator Soal, Level Kognitif L1-L3, Bentuk Soal, No Soal, Tingkat Kesukaran).
+BAGIAN II: Kartu Soal lengkap per nomor (Identitas, CP, Materi, Indikator, Level Kognitif, Bentuk Soal, Kesukaran, Stimulus, Pertanyaan, Opsi/Ruang jawab, Kunci Jawaban, Pedoman Penskoran).
+BAGIAN III: Rekapitulasi kunci jawaban, rubrik penskoran analitik uraian, rumus konversi nilai 0-100, tabel interval KKTP.`;
+
+  if(sumberPdf && pdfExtractedText){
+    prompt += `\n\nPENTING: Seluruh stimulus wacana, data, dan pertanyaan WAJIB 100% bersumber dari teks modul/buku ajar berikut, jangan mengarang di luar isi ini:\n"""${pdfExtractedText.slice(0,12000)}"""`;
+  }
+
+  try{
+    tahap1Result = await callClaude(prompt);
+  }catch(err){
+    tahap1Result = "Terjadi kesalahan saat menghubungi AI. Pastikan aplikasi ini dibuka melalui pratinjau Claude.ai.";
+  }
+
+  renderDocT1();
+  document.getElementById('sumberT1').value = tahap1Result;
+  document.getElementById('tabBtn2').disabled = false;
+  document.getElementById('tabBtn2').classList.remove('opacity-40','cursor-not-allowed');
+
+  // prefill tahap 2 identity
+  document.getElementById('t2sekolah').value = tahap1Meta.satuan;
+  document.getElementById('t2mapel').value = tahap1Meta.mapel;
+  document.getElementById('t2kelas').value = `${tahap1Meta.kelas} / ${tahap1Meta.fase}`;
+  document.getElementById('t2jenis').value = tahap1Meta.jenisAsesmen;
+
+  btn.disabled = false; btn.innerHTML = '🚀 Generate Kartu Soal & Kisi-Kisi AI (Langkah 1)';
+  showDoc('t1');
+}
+
+function mdToHtml(md){
+  // konversi ringan markdown -> html (heading, tabel, list, bold)
+  let html = md
+    .replace(/^### (.*)$/gm,'<h3 class="font-semibold text-base mt-4 mb-1">$1</h3>')
+    .replace(/^## (.*)$/gm,'<h2 class="font-bold text-lg mt-5 mb-2 border-b border-slate-300 pb-1">$1</h2>')
+    .replace(/^# (.*)$/gm,'<h1 class="font-bold text-xl mb-3">$1</h1>')
+    .replace(/\*\*(.*?)\*\*/g,'<b>$1</b>');
+  // tabel markdown sederhana
+  const lines = html.split('\n');
+  let out = []; let inTable=false; let rows=[];
+  for(let line of lines){
+    if(/^\|.*\|$/.test(line.trim())){
+      if(!inTable){inTable=true;rows=[];}
+      rows.push(line.trim());
+    } else {
+      if(inTable){ out.push(tableHtml(rows)); inTable=false; }
+      out.push(line);
+    }
+  }
+  if(inTable) out.push(tableHtml(rows));
+  return out.join('\n').split('\n').map(l=> l.startsWith('<')?l:(l.trim()===''?'<br>':`<p class="mb-1">${l}</p>`)).join('');
+}
+function tableHtml(rows){
+  rows = rows.filter(r=>!/^\|[\s:-]+\|$/.test(r));
+  let html = '<table class="my-3">';
+  rows.forEach((r,i)=>{
+    const cells = r.split('|').slice(1,-1).map(c=>c.trim());
+    html += '<tr>' + cells.map(c=> i===0? `<th>${c}</th>`:`<td>${c}</td>`).join('') + '</tr>';
+  });
+  return html + '</table>';
+}
+
+function renderDocT1(){
+  document.getElementById('doc-t1').innerHTML = `
+    <div class="text-center kop-line pb-2">
+      <h2 class="font-bold text-lg">KISI-KISI DAN KARTU SOAL</h2>
+      <p class="text-sm">${tahap1Meta.satuan||''} — ${tahap1Meta.mapel||''} — ${tahap1Meta.kelas||''} (${tahap1Meta.fase||''})</p>
+      <p class="text-xs">${tahap1Meta.jenisAsesmen||''} · ${tahap1Meta.kurikulum||''} · Alokasi Waktu: ${tahap1Meta.waktu||''}</p>
+    </div>
+    <div class="text-sm leading-relaxed">${mdToHtml(tahap1Result)}</div>
+  `;
+}
+
+function syncFromTahap1(){
+  document.getElementById('sumberT1').value = tahap1Result;
+}
+
+// --- TAHAP 2 ---
+let docResults = {naskah:"", ljs:"", kunci:""};
+
+async function generateTahap2(mode){
+  if(!tahap1Result){ alert('Silakan generate Tahap 1 terlebih dahulu.'); return; }
+  const meta2 = {
+    sekolah: fVal('t2sekolah'), mapel: fVal('t2mapel'), kelas: fVal('t2kelas'),
+    jenis: fVal('t2jenis'), ta: fVal('t2ta'), tanggal: fVal('t2tanggal'), guru: fVal('t2guru')
+  };
+  const base = `Berdasarkan kisi-kisi dan kartu soal berikut (bahasa Indonesia):\n"""${tahap1Result.slice(0,10000)}"""\nIdentitas naskah: Sekolah=${meta2.sekolah}, Mapel=${meta2.mapel}, Kelas/Fase=${meta2.kelas}, Jenis=${meta2.jenis}, Tahun Ajaran/Semester=${meta2.ta}, Tanggal=${meta2.tanggal}, Guru=${meta2.guru}.\n`;
+
+  const tasks = [];
+  if(mode==='all'||mode==='naskah') tasks.push(['naskah', base + `Susun DOKUMEN NASKAH SOAL UJIAN siap cetak dalam format Markdown: kop resmi, judul naskah, tabel identitas siswa, kotak petunjuk umum (7 poin), lalu Bagian I Pilihan Ganda (stimulus+soal+opsi A-D), Bagian II Isian Singkat, Bagian III Uraian/Esai dengan ruang jawab bergaris. Tutup dengan "--- SELAMAT MENGERJAKAN & SEMOGA SUKSES ---".`]);
+  if(mode==='all'||mode==='ljs') tasks.push(['ljs', base + `Susun DOKUMEN LEMBAR JAWABAN SISWA (LJS) format Markdown: kop resmi, identitas siswa, petunjuk pengisian, Bagian I grid bulatan pilihan ganda (A)(B)(C)(D) dua kolom, Bagian II kotak isian singkat bernomor, Bagian III ruang jawaban uraian bergaris, tabel rekap skor (PG/Isian/Uraian/Total/Nilai Akhir), kolom tanda tangan siswa-pengawas-guru.`]);
+  if(mode==='all'||mode==='kunci') tasks.push(['kunci', base + `Susun DOKUMEN GURU - KUNCI JAWABAN & PEDOMAN PENSKORAN format Markdown, diawali label "DOKUMEN GURU – RAHASIA – TIDAK UNTUK DIBAGIKAN KEPADA SISWA". Bagian I kunci PG (No, Kunci, Ringkasan Alasan, Materi, Skor Maks), Bagian II kunci isian singkat + alternatif jawaban, Bagian III rubrik penskoran analitik uraian berjenjang (Sangat Baik-Kurang), Bagian IV rekap skor maksimal, rumus nilai akhir 0-100, tabel interval KKTP, kolom tanda tangan Kepala Sekolah & Guru + NIP.`]);
+
+  for(const [key, prompt] of tasks){
+    const el = document.getElementById('doc-'+key);
+    el.classList.remove('hidden');
+    el.innerHTML = '<div class="text-center py-10"><span class="spinner inline-block"></span><p class="text-sm text-slate-500 mt-2">Menyusun dokumen...</p></div>';
+    try{
+      docResults[key] = await callClaude(prompt);
+    }catch(e){
+      docResults[key] = "Terjadi kesalahan saat menghubungi AI.";
+    }
+    renderDoc2(key, meta2);
+  }
+  showDoc(tasks[0][0]);
+}
+
+function renderDoc2(key, meta2){
+  const titles = {
+    naskah: `NASKAH SOAL ${meta2.jenis||'ASESMEN'} TAHUN AJARAN ${meta2.ta||''}`,
+    ljs: `LEMBAR JAWABAN SISWA (LJS)`,
+    kunci: `DOKUMEN GURU – RAHASIA – KUNCI JAWABAN & PEDOMAN PENSKORAN`
+  };
+  document.getElementById('doc-'+key).innerHTML = `
+    <div class="text-center kop-line pb-2">
+      <h2 class="font-bold text-base uppercase">${meta2.sekolah||''}</h2>
+      <h3 class="font-bold text-sm mt-1">${titles[key]}</h3>
+      <p class="text-xs">${meta2.mapel||''} · ${meta2.kelas||''} · ${meta2.tanggal||''} · Guru: ${meta2.guru||''}</p>
+    </div>
+    <div class="text-sm leading-relaxed">${mdToHtml(docResults[key])}</div>
+  `;
+}
+
+// --- Workspace tab switching ---
+function showDoc(key){
+  ['t1','naskah','ljs','kunci'].forEach(k=>{
+    document.getElementById('doc-'+k).classList.toggle('hidden', k!==key);
+    document.getElementById('dt-'+k).classList.toggle('active', k===key);
+  });
+  document.getElementById('emptyState').classList.add('hidden');
+  currentDoc = key;
+}
+let currentDoc = 't1';
+
+function getActiveText(){
+  if(currentDoc==='t1') return tahap1Result;
+  return docResults[currentDoc] || '';
+}
+function copyActive(){
+  const text = getActiveText();
+  if(!text){ alert('Belum ada dokumen untuk disalin.'); return; }
+  navigator.clipboard.writeText(text).then(()=> alert('Teks dokumen berhasil disalin.'));
+}
+function downloadDocx(){
+  const el = document.getElementById('doc-'+currentDoc);
+  if(!el || el.innerHTML.trim()===''){ alert('Belum ada dokumen untuk diunduh.'); return; }
+  const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><style>body{font-family:Calibri,Arial,sans-serif;font-size:12pt;} table{border-collapse:collapse;width:100%;} table,td,th{border:1px solid #000;padding:4px;}</style></head><body>";
+  const footer = "</body></html>";
+  const blob = new Blob([header + el.innerHTML + footer], {type:'application/msword'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `dokumen_${currentDoc}.doc`;
+  a.click();
+}
+</script>
+</body>
+</html>
